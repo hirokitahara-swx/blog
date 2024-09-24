@@ -1,0 +1,87 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create SecurityGroups"
+
+
+Parameters:
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Sorry-DNS
+
+
+Resources:
+#SG ALB
+  SGALB:
+    Type: "AWS::EC2::SecurityGroup"
+    DeletionPolicy: "Delete"
+    Properties:
+      GroupDescription: "HTTPS access from anywhere"
+      GroupName: "SG-alb"
+      Tags:
+        - Key: "Name"
+          Value: "SG-alb"
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue  
+      VpcId: !ImportValue VPCID-Export
+  SGALBIngress0:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DeletionPolicy: "Delete"
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: "HTTPS access from anywhere"
+      FromPort: "443"
+      GroupId: !Ref SGALB
+      IpProtocol: "tcp"
+      ToPort: "443"
+  SGALBEgress0:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DeletionPolicy: "Delete"
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: "no limit access to anywhere"
+      GroupId: !Ref SGALB
+      IpProtocol: "-1"
+#SG Web
+  SGWebServer:
+    Type: "AWS::EC2::SecurityGroup"
+    DeletionPolicy: "Delete"
+    Properties:
+      GroupDescription: "for web server"
+      GroupName: "SG-web"
+      Tags:
+        - Key: "Name"
+          Value: "SG-web"
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue  
+      VpcId: !ImportValue VPCID-Export
+  SGWebServerIngress0:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DeletionPolicy: "Delete"
+    Properties:
+      Description: "HTTP access from ALB"
+      FromPort: "80"
+      GroupId: !Ref SGWebServer
+      IpProtocol: "tcp"
+      SourceSecurityGroupId: !Ref SGALB
+      ToPort: "80"
+  SGWebServerEgress0:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DeletionPolicy: "Delete"
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: "no limit access to anywhere"
+      GroupId: !Ref SGWebServer
+      IpProtocol: "-1"
+
+Outputs:
+  SGWebServer:
+    Value: !Ref SGWebServer
+    Export: 
+      Name: SGWebServer-SGID-Export
+  SGALB:
+    Value: !Ref SGALB
+    Export: 
+      Name: SGALB-SGID-Export

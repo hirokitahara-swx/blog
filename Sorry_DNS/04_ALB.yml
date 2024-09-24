@@ -1,0 +1,100 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ALBName:
+    Type: String
+    Description: (Required) Enter ALB Name.
+    Default: alb01
+  TargetGroup1Name:
+    Type: String
+    Description: (Required) Enter TargetGroup1 Name.
+    Default: tg-web
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Sorry-DNS
+
+
+
+Resources:
+#ALB setting
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    DeletionPolicy: "Delete" 
+    UpdateReplacePolicy: "Delete" 
+    Properties:
+      IpAddressType: ipv4 
+      Name:
+        Ref: ALBName
+      Scheme: "internet-facing" # [internal | internet-facing]
+      SecurityGroups:
+        - !ImportValue SGALB-SGID-Export #SecurityGroup
+      SubnetMappings:
+        - SubnetId: !ImportValue PublicSubnet01AZa-SubnetID-Export
+        - SubnetId: !ImportValue PublicSubnet02AZc-SubnetID-Export
+      Tags:
+        - Key: Name
+          Value:
+            Ref: ALBName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+      Type: application # [ application | network ]
+
+  TargetGroup1:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DeletionPolicy: "Delete"
+    Properties:
+      Port: 80
+      Protocol: "HTTP"
+      VpcId: !ImportValue VPCID-Export
+      HealthCheckEnabled: True 
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPath: "/"
+      HealthCheckPort: "traffic-port"
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 30
+      Matcher:
+        HttpCode: 200
+      Name:
+        Ref: TargetGroup1Name
+      Tags:
+        - Key: Name
+          Value:
+            Ref: TargetGroup1Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+      TargetGroupAttributes:
+        - Key: "deregistration_delay.timeout_seconds" # [ 0 ~ 3600 ]
+          Value: 300
+        - Key: "stickiness.enabled" #選択
+          Value: "false"
+        - Key: "load_balancing.algorithm.type" #選択 [ round_robin | least_outstanding_requests ]
+          Value: "round_robin"
+        - Key: "slow_start.duration_seconds" #選択 [ 0 | 30 ~ 900 ]
+          Value: 0
+      Targets: 
+        - Id: !ImportValue EC2WebServer-InstanceId-Export
+
+
+  ## HTTPS / ACM発行後に設定
+  # Listener:
+  #   Type: 'AWS::ElasticLoadBalancingV2::Listener'
+  #   DeletionPolicy: "Delete"
+  #   Properties:
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn:
+  #           Ref: "TargetGroup1"
+  #     LoadBalancerArn:
+  #       Ref: "LoadBalancer"
+  #     Port: '443'
+  #     Protocol: HTTPS
+  #     SslPolicy: "ELBSecurityPolicy-TLS13-1-2-2021-06" 
+  #     Certificates:
+  #       - CertificateArn: !ImportValue MyCertificateManager-Arn-Export 
+
