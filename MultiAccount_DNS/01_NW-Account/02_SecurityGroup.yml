@@ -1,0 +1,62 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create SecurityGroups"
+
+
+Parameters:
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+
+
+Resources:
+#SG DNS
+  SGDNS:
+    Type: "AWS::EC2::SecurityGroup"
+    DeletionPolicy: "Delete"
+    Properties:
+      GroupDescription: "for dns server"
+      GroupName: "NW-SG-dns"
+      Tags:
+        - Key: "Name"
+          Value: "NW-SG-dns"
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue  
+      VpcId: !ImportValue NW-VPCID-Export
+  SGDNSIngress0:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DeletionPolicy: "Delete"
+    Properties:
+      Description: "dns-tcp access from anywhare"
+      FromPort: "53"
+      GroupId: !Ref SGDNS
+      IpProtocol: "tcp"
+      CidrIp: "0.0.0.0/0"
+      ToPort: "53"
+  SGDNSIngress1:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DeletionPolicy: "Delete"
+    Properties:
+      Description: "dns-udp access from anywhare"
+      FromPort: "53"
+      GroupId: !Ref SGDNS
+      IpProtocol: "udp"
+      CidrIp: "0.0.0.0/0"
+      ToPort: "53"
+  SGWebEgress0:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DeletionPolicy: "Delete"
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: "no limit access to anywhere"
+      GroupId: !Ref SGDNS
+      IpProtocol: "-1"
+
+Outputs:
+  SGDNS:
+    Value: !Ref SGDNS
+    Export: 
+      Name: NW-SGDNS-SGID-Export

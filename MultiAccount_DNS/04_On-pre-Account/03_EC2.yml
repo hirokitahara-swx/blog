@@ -1,0 +1,275 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+
+
+Parameters:
+# IAM Role
+  EC2InstanceProfileRoleName:
+    Type: "String"
+    Default: "ONP-ssm-ec2"
+    Description: "Required. Input IAM role prefix name."
+    MinLength: 1
+
+# EC2
+  ImageId :
+    Type : "AWS::EC2::Image::Id"
+    Description: Enter Amazon Machine Image ID for Amazon Linux 2023.
+    Default: "ami-0b9593848b0f1934e" # Arm：ami-0160f9c12ee73a308, x86: ami-0b9593848b0f1934e
+  InstanceTypeParameter:
+    Type: String
+    Default: "t3.nano"
+  InstanceName:
+    Type: String
+    Description: (Required) Enter EC2 Instance Name.
+    Default: "ONP-ec2"
+  PrivateIpAddress:
+    Type: String
+    Description: (Required) Enter PrivateIpAddress for instance.
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}) 
+    ConstraintDescription: Must be entered IPAddress. If not needed, modify the template.  
+    Default: "192.168.2.10"
+  DiskSize1:
+    Type: String
+    Description: (Required) Enter the disk size.
+    Default: "8"
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+  InstanceNameDNS:
+    Type: String
+    Description: (Required) Enter EC2 Instance Name.
+    Default: "ONP-dns-server"
+  PrivateIpAddressDNS:
+    Type: String
+    Description: (Required) Enter PrivateIpAddress for instance.
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}) 
+    ConstraintDescription: Must be entered IPAddress. If not needed, modify the template.  
+    Default: "192.168.1.10"
+
+
+Resources:
+# IAM Role
+  role:
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Delete"
+    Properties:
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      RoleName: !Join [ "-", [ "Ref":"EC2InstanceProfileRoleName", "Ref":"AWS::Region" ] ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: ""
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+                - "ssm.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    DeletionPolicy: "Delete"
+    Properties:
+      Path: "/"
+      Roles:
+        -
+          Ref: "role"
+      InstanceProfileName: !Join [ "-", [ "Ref":"EC2InstanceProfileRoleName", "Ref":"AWS::Region" ] ]
+
+
+# EC2
+  EC2Instance:
+    Type: "AWS::EC2::Instance"
+    DeletionPolicy: "Delete"
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: false
+            VolumeSize:
+              Ref: "DiskSize1"
+            VolumeType: "gp3"
+      CreditSpecification: 
+        CPUCredits: standard
+      IamInstanceProfile: 
+        Ref: InstanceProfile # instans profile
+      ImageId: 
+        Ref: "ImageId"
+      InstanceInitiatedShutdownBehavior: "stop"
+      InstanceType:
+        Ref: "InstanceTypeParameter"
+      Monitoring: false
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeleteOnTermination: true 
+          DeviceIndex: 0
+          GroupSet:
+          - !ImportValue ONP-SGIcmp-SGID-Export # Security Group
+          PrivateIpAddresses:
+            - PrivateIpAddress:
+                Ref: "PrivateIpAddress"
+              Primary: true          
+          SubnetId:
+            !ImportValue ONP-PrivateSubnet02AZc-SubnetID-Export #Subnet 
+      SourceDestCheck: true
+      Tags:
+        - Key: Name
+          Value:
+            Ref: InstanceName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+      Tenancy: "default"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+
+          sudo cat <<EOL > /etc/systemd/resolved.conf
+          [Resolve]
+          DNS=192.168.1.10
+          Domains=~.
+          EOL
+
+          sudo systemctl restart systemd-resolved
+
+# EC2
+  EC2InstanceDNS:
+    Type: "AWS::EC2::Instance"
+    DeletionPolicy: "Delete"
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: false
+            VolumeSize:
+              Ref: "DiskSize1"
+            VolumeType: "gp3"
+      CreditSpecification: 
+        CPUCredits: standard
+      IamInstanceProfile: 
+        Ref: InstanceProfile # instans profile
+      ImageId: 
+        Ref: "ImageId"
+      InstanceInitiatedShutdownBehavior: "stop"
+      InstanceType:
+        Ref: "InstanceTypeParameter"
+      Monitoring: false
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeleteOnTermination: true 
+          DeviceIndex: 0
+          GroupSet:
+          - !ImportValue ONP-SGIcmp-SGID-Export # Security Group
+          - !ImportValue ONP-SGDNS-SGID-Export # Security Group
+          PrivateIpAddresses:
+            - PrivateIpAddress:
+                Ref: "PrivateIpAddressDNS"
+              Primary: true          
+          SubnetId:
+            !ImportValue ONP-PrivateSubnet01AZa-SubnetID-Export #Subnet 
+      SourceDestCheck: true
+      Tags:
+        - Key: Name
+          Value:
+            Ref: InstanceNameDNS
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+      Tenancy: "default"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+
+          sudo dnf -y install bind bind-chroot
+
+          sudo cp -p /etc/named.conf /etc/named.conf.bak
+
+          sudo cat <<EOL > /etc/named.conf
+          options {
+                  listen-on port 53 { 127.0.0.1;192.168.1.10;};
+                  listen-on-v6 port 53 { ::1; };
+                  directory       "/var/named";
+                  dump-file       "/var/named/data/cache_dump.db";
+                  statistics-file "/var/named/data/named_stats.txt";
+                  memstatistics-file "/var/named/data/named_mem_stats.txt";
+                  secroots-file   "/var/named/data/named.secroots";
+                  recursing-file  "/var/named/data/named.recursing";
+                  allow-query     { any; };
+                  forwarders{8.8.8.8;};
+
+                  /*
+                  - If you are building an AUTHORITATIVE DNS server, do NOT enable recursion.
+                  - If you are building a RECURSIVE (caching) DNS server, you need to enable
+                    recursion.
+                  - If your recursive DNS server has a public IP address, you MUST enable access
+                    control to limit queries to your legitimate users. Failing to do so will
+                    cause your server to become part of large scale DNS amplification
+                    attacks. Implementing BCP38 within your network would greatly
+                    reduce such attack surface
+                  */
+                  recursion yes;
+
+                  dnssec-validation no;
+
+                  managed-keys-directory "/var/named/dynamic";
+                  geoip-directory "/usr/share/GeoIP";
+
+                  pid-file "/run/named/named.pid";
+                  session-keyfile "/run/named/session.key";
+
+                  /* https://fedoraproject.org/wiki/Changes/CryptoPolicy */
+                  include "/etc/crypto-policies/back-ends/bind.config";
+          };
+
+          logging {
+                  channel default_debug {
+                          file "data/named.run";
+                          severity dynamic;
+                  };
+          };
+
+          zone "onprem.private" IN {
+                  type master;
+                  file "onprem.private.zone";
+                  allow-update { none;};
+          };
+
+          include "/etc/named.rfc1912.zones";
+          include "/etc/named.root.key";
+          EOL
+
+          sudo cp -p /var/named/named.empty /var/named/onprem.private.zone
+
+          sudo cat <<EOL > /var/named/onprem.private.zone
+          \$TTL 3H
+          \$ORIGIN onprem.private.
+          @       IN SOA  ns1 root (
+                                                  2024100801      ; serial
+                                                  1D      ; refresh
+                                                  1H      ; retry
+                                                  1W      ; expire
+                                                  3H )    ; minimum
+                  NS      ns1.onprem.private.
+          ns1     A       192.168.1.10
+          host1   A       192.168.2.10
+          EOL
+
+          sudo systemctl start named-chroot
+          sudo systemctl enable named-chroot
+
+
+Outputs:
+  EC2Instance:
+    Value: !Ref EC2Instance
+    Export: 
+      Name: ONP-EC2-InstanceId-Export #Instance
+  EC2InstanceDNS:
+    Value: !Ref EC2InstanceDNS
+    Export: 
+      Name: ONP-DNS-InstanceId-Export #Instance DNS

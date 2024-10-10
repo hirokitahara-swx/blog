@@ -1,0 +1,141 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create TGW"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: Require Data
+        Parameters:
+          - TGWShareAWSAccountID1
+          - TGWShareAWSAccountID2
+          - TGWShareAWSAccountID3
+      - 
+        Label:
+          default: None Require Data
+        Parameters:
+          - CommonTagName
+          - CommonTagValue
+          - AmazonSideAsn
+          - TransitGatewayName
+          - TransitGatewayAttachmentName
+
+Parameters:
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+  AmazonSideAsn:
+    Type: String
+    Default: 64512
+  TransitGatewayName:
+    Type: String
+    Default: NW-tgw-01
+  TransitGatewayAttachmentName:
+    Type: String
+    Default: NW-tgw-attachment-01
+  TGWShareAWSAccountID1:
+    Type: String
+    ConstraintDescription: Must be entered AWS Account to share TransitGateway.
+    AllowedPattern: ".+"
+  TGWShareAWSAccountID2:
+    Type: String
+    ConstraintDescription: Must be entered AWS Account to share TransitGateway.
+    AllowedPattern: ".+"
+  TGWShareAWSAccountID3:
+    Type: String
+    ConstraintDescription: Must be entered AWS Account to share TransitGateway.
+    AllowedPattern: ".+"
+
+
+Resources:
+#TransitGateway
+  EC2TransitGateway:
+      Type: "AWS::EC2::TransitGateway"
+      Properties:
+        AmazonSideAsn: !Ref AmazonSideAsn
+        DnsSupport: "disable"            
+        DefaultRouteTableAssociation: "enable"
+        DefaultRouteTablePropagation: "enable"
+        AutoAcceptSharedAttachments: "enable"
+        Tags:
+          - Key: "Name"
+            Value: !Ref TransitGatewayName       
+          - Key: !Ref CommonTagName
+            Value: !Ref CommonTagValue
+
+
+  EC2TransitGatewayAttachment:
+    Type: "AWS::EC2::TransitGatewayAttachment"
+    Properties:
+      TransitGatewayId: !Ref EC2TransitGateway
+      VpcId: !ImportValue NW-VPCID-Export
+      SubnetIds: 
+        - !ImportValue  NW-TGWSubnet01AZa-SubnetID-Export
+        - !ImportValue  NW-TGWSubnet02AZc-SubnetID-Export
+      Tags:
+        - Key: "Name"
+          Value: !Ref TransitGatewayAttachmentName       
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+
+#Route Table(private subnet)
+  RtbPrivateRoute1:
+      Type: 'AWS::EC2::Route'
+      DependsOn: EC2TransitGatewayAttachment
+      DeletionPolicy: Delete
+      Properties:
+        RouteTableId: !ImportValue NW-PrivateSubnet-RouteTableID-Export
+        DestinationCidrBlock: 10.0.0.0/8
+        TransitGatewayId: !Ref  EC2TransitGateway
+  
+  RtbPrivateRoute2:
+      Type: 'AWS::EC2::Route'
+      DependsOn: EC2TransitGatewayAttachment      
+      DeletionPolicy: Delete
+      Properties:
+        RouteTableId: !ImportValue NW-PrivateSubnet-RouteTableID-Export
+        DestinationCidrBlock: 172.16.0.0/12
+        TransitGatewayId: !Ref  EC2TransitGateway
+
+  RtbPrivateRoute3:
+      Type: 'AWS::EC2::Route'
+      DependsOn: EC2TransitGatewayAttachment      
+      DeletionPolicy: Delete
+      Properties:
+        RouteTableId: !ImportValue NW-PrivateSubnet-RouteTableID-Export
+        DestinationCidrBlock: 192.168.0.0/16
+        TransitGatewayId: !Ref  EC2TransitGateway
+
+#Resource Access Manager
+  ResourceShare:            
+      Type: AWS::RAM::ResourceShare
+      Properties:
+        AllowExternalPrincipals: true
+        Name: !Ref TransitGatewayName
+        Principals: 
+          - !Ref TGWShareAWSAccountID1
+          - !Ref TGWShareAWSAccountID2
+          - !Ref TGWShareAWSAccountID3
+        ResourceArns: 
+          - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:transit-gateway/${EC2TransitGateway}
+        Tags: 
+          - Key: "Name"
+            Value: !Ref TransitGatewayName
+          - Key: !Ref CommonTagName
+            Value: !Ref CommonTagValue            
+
+
+Outputs:
+  EC2TransitGateway:
+    Value: !Ref EC2TransitGateway
+    Export: 
+      Name: NW-TransitGateway
+  EC2TransitGatewayAttachment:
+    Value: !Ref EC2TransitGatewayAttachment
+    Export: 
+      Name: NW-TransitGatewayAttachment

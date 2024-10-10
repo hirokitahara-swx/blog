@@ -1,0 +1,129 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+
+
+Parameters:
+# IAM Role
+  EC2InstanceProfileRoleName:
+    Type: "String"
+    Default: "WL1-ssm-ec2"
+    Description: "Required. Input IAM role prefix name."
+    MinLength: 1
+
+# EC2
+  ImageId :
+    Type : "AWS::EC2::Image::Id"
+    Description: Enter Amazon Machine Image ID for Amazon Linux 2023.
+    Default: "ami-0b9593848b0f1934e" # Arm：ami-0160f9c12ee73a308, x86: ami-0b9593848b0f1934e
+  InstanceTypeParameter:
+    Type: String
+    Default: "t3.nano"
+  InstanceName:
+    Type: String
+    Description: (Required) Enter EC2 Instance Name.
+    Default: "WL1-ec2"
+  PrivateIpAddress:
+    Type: String
+    Description: (Required) Enter PrivateIpAddress for instance.
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}) 
+    ConstraintDescription: Must be entered IPAddress. If not needed, modify the template.  
+    Default: "10.1.1.10"
+  DiskSize1:
+    Type: String
+    Description: (Required) Enter the disk size.
+    Default: "8"
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+
+
+
+Resources:
+# IAM Role
+  role:
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Delete"
+    Properties:
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      RoleName: !Join [ "-", [ "Ref":"EC2InstanceProfileRoleName", "Ref":"AWS::Region" ] ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: ""
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+                - "ssm.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    DeletionPolicy: "Delete"
+    Properties:
+      Path: "/"
+      Roles:
+        -
+          Ref: "role"
+      InstanceProfileName: !Join [ "-", [ "Ref":"EC2InstanceProfileRoleName", "Ref":"AWS::Region" ] ]
+
+
+# EC2
+  EC2Instance:
+    Type: "AWS::EC2::Instance"
+    DeletionPolicy: "Delete"
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: false
+            VolumeSize:
+              Ref: "DiskSize1"
+            VolumeType: "gp3"
+      CreditSpecification: 
+        CPUCredits: standard
+      IamInstanceProfile: 
+        Ref: InstanceProfile # instans profile
+      ImageId: 
+        Ref: "ImageId"
+      InstanceInitiatedShutdownBehavior: "stop"
+      InstanceType:
+        Ref: "InstanceTypeParameter"
+      Monitoring: false
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeleteOnTermination: true 
+          DeviceIndex: 0
+          GroupSet:
+          - !ImportValue WL1-SGIcmp-SGID-Export # Security Group
+          PrivateIpAddresses:
+            - PrivateIpAddress:
+                Ref: "PrivateIpAddress"
+              Primary: true          
+          SubnetId:
+            !ImportValue WL1-PrivateSubnet01AZa-SubnetID-Export #Subnet 
+      SourceDestCheck: true
+      Tags:
+        - Key: Name
+          Value:
+            Ref: InstanceName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+      Tenancy: "default"
+      # UserData:
+      #   Fn::Base64: |
+      #     #!/bin/bash
+
+
+Outputs:
+  EC2Instance:
+    Value: !Ref EC2Instance
+    Export: 
+      Name: WL1-EC2-InstanceId-Export #Instance

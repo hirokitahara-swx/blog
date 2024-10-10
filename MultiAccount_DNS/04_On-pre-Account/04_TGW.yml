@@ -1,0 +1,76 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create TGW"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: Require Data
+        Parameters:
+          - TransitGatewayID
+      - 
+        Label:
+          default: None Require Data
+        Parameters:
+          - CommonTagName
+          - CommonTagValue
+          - TransitGatewayAttachmentName
+
+
+Parameters:
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+  TransitGatewayAttachmentName:
+    Type: String
+    Default: ONP-tgw-attachment-01
+  TransitGatewayID:
+    Type: String
+    ConstraintDescription: Must be entered Shared TransitGateway ID.
+    AllowedPattern: ".+"
+
+Resources:
+  EC2TransitGatewayAttachment:
+    Type: "AWS::EC2::TransitGatewayAttachment"
+    Properties:
+      TransitGatewayId: !Ref TransitGatewayID
+      VpcId: !ImportValue ONP-VPCID-Export
+      SubnetIds: 
+        - !ImportValue  ONP-TGWSubnet01AZa-SubnetID-Export
+        - !ImportValue  ONP-TGWSubnet02AZc-SubnetID-Export
+      Tags:
+        - Key: "Name"
+          Value: !Ref TransitGatewayAttachmentName       
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue
+
+#Route Table(private subnet)
+  RtbPrivateRoute1:
+      Type: 'AWS::EC2::Route'
+      DependsOn: EC2TransitGatewayAttachment
+      DeletionPolicy: Delete
+      Properties:
+        RouteTableId: !ImportValue ONP-PrivateSubnet-RouteTableID-Export
+        DestinationCidrBlock: 10.0.0.0/8
+        TransitGatewayId: !Ref TransitGatewayID
+  
+  RtbPrivateRoute2:
+      Type: 'AWS::EC2::Route'
+      DependsOn: EC2TransitGatewayAttachment      
+      DeletionPolicy: Delete
+      Properties:
+        RouteTableId: !ImportValue ONP-PrivateSubnet-RouteTableID-Export
+        DestinationCidrBlock: 172.16.0.0/12
+        TransitGatewayId: !Ref TransitGatewayID
+
+
+Outputs:
+  EC2TransitGatewayAttachment:
+    Value: !Ref EC2TransitGatewayAttachment
+    Export: 
+      Name: ONP-TransitGatewayAttachment

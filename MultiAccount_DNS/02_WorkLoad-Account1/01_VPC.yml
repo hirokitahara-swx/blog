@@ -1,0 +1,334 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create VPC
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - E3006 # allow alphanumeric name
+        - E3031 # allow x.x.x.x
+        - W3010 # allow AZ name hardcode
+
+Parameters:
+  VPCName:
+    Type: String
+    Default: WL1-vpc01
+  VPCCIDR:
+    Type: String
+    Default: 10.1.0.0/16
+  PublicSubnet01Name:
+    Type: String
+    Default: WL1-subnet-public-01-a
+  PublicSubnet01CIDR:
+    Type: String
+    Default: 10.1.101.0/24
+  PublicSubnet02Name:
+    Type: String
+    Default: WL1-subnet-public-02-c
+  PublicSubnet02CIDR:
+    Type: String
+    Default: 10.1.102.0/24
+  PrivateSubnet01Name:
+    Type: String
+    Default: WL1-subnet-private-01-a
+  PrivateSubnet01CIDR:
+    Type: String
+    Default: 10.1.1.0/24
+  PrivateSubnet02Name:
+    Type: String
+    Default: WL1-subnet-private-02-c
+  PrivateSubnet02CIDR:
+    Type: String
+    Default: 10.1.2.0/24
+  TGWSubnet01Name:
+    Type: String
+    Default: WL1-subnet-tgw-01-a
+  TGWSubnet01CIDR:
+    Type: String
+    Default: 10.1.251.0/28
+  TGWSubnet02Name:
+    Type: String
+    Default: WL1-subnet-tgw-02-c
+  TGWSubnet02CIDR:
+    Type: String
+    Default: 10.1.252.0/28
+  InternetGatewayName:
+    Type: String
+    Default: WL1-igw01
+  NatGatewayName:
+    Type: String
+    Default: WL1-ngw-a
+  EIPNatGatewayAZaName:
+    Type: String
+    Default: WL1-eip-ngw-a
+  RTBPublicName:
+    Type: String
+    Default: WL1-rtb-public
+  RTBPrivateName:
+    Type: String
+    Default: WL1-rtb-private
+  RTBTGWName:
+    Type: String
+    Default: WL1-rtb-tgw
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+
+
+Resources:
+ #VPC
+  NewVPC:
+    Type: 'AWS::EC2::VPC'
+    DeletionPolicy: Delete
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      Tags:
+        - Key: Name
+          Value: !Ref VPCName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue  
+#Subnet
+  #Public Subnet
+  SubnetPublicA:
+    Type: 'AWS::EC2::Subnet'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: !Ref PublicSubnet01CIDR
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: !Ref PublicSubnet01Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  SubnetPublicC:
+    Type: 'AWS::EC2::Subnet'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: !Ref PublicSubnet02CIDR
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: !Ref PublicSubnet02Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  #private Subnet
+  SubnetPrivateA:
+    Type: 'AWS::EC2::Subnet'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: !Ref PrivateSubnet01CIDR
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: !Ref PrivateSubnet01Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  SubnetPrivateC:
+    Type: 'AWS::EC2::Subnet'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: !Ref PrivateSubnet02CIDR
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: !Ref PrivateSubnet02Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  #TGW Subnet
+  SubnetTGWA:
+    Type: 'AWS::EC2::Subnet'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: !Ref TGWSubnet01CIDR
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: !Ref TGWSubnet01Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  SubnetTGWC:
+    Type: 'AWS::EC2::Subnet'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: !Ref TGWSubnet02CIDR
+      MapPublicIpOnLaunch: 'false'
+      Tags:
+        - Key: Name
+          Value: !Ref TGWSubnet02Name
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+#IGW
+  Igw:
+    Type: 'AWS::EC2::InternetGateway'
+    DeletionPolicy: Delete
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref InternetGatewayName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  IgwAttach:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      InternetGatewayId: !Ref Igw
+#NatGW
+  NgwA:
+   Type: 'AWS::EC2::NatGateway'
+   DeletionPolicy: Delete
+   Properties:
+     AllocationId: !GetAtt
+       - EipNgwA
+       - AllocationId
+     SubnetId: !Ref SubnetPublicA
+     Tags:
+       - Key: Name
+         Value: !Ref NatGatewayName
+       - Key: !Ref CommonTagName
+         Value: !Ref CommonTagValue 
+#EIP
+  EipNgwA:
+   Type: 'AWS::EC2::EIP'
+   DeletionPolicy: Delete
+   Properties:
+     Domain: vpc
+     Tags:
+       - Key: Name
+         Value: !Ref EIPNatGatewayAZaName
+       - Key: !Ref CommonTagName
+         Value: !Ref CommonTagValue 
+#Route Table
+  RtbPublic:
+    Type: 'AWS::EC2::RouteTable'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Ref RTBPublicName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  RtbPublicRoute0:
+    Type: 'AWS::EC2::Route'
+    DependsOn: IgwAttach
+    DeletionPolicy: Delete
+    Properties:
+      RouteTableId: !Ref RtbPublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+  RtbPrivate:
+    Type: 'AWS::EC2::RouteTable'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Ref RTBPrivateName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+  RtbPrivateARoute0:
+   Type: 'AWS::EC2::Route'
+   DeletionPolicy: Delete
+   Properties:
+     RouteTableId: !Ref RtbPrivate
+     DestinationCidrBlock: 0.0.0.0/0
+     NatGatewayId: !Ref NgwA
+  RtbTGW:
+    Type: 'AWS::EC2::RouteTable'
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Ref RTBTGWName
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue 
+#Route Table Assoociate Subnet
+  SubnetRouteTableAssociationSubnetPublicA:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPublicA
+      RouteTableId: !Ref RtbPublic
+  SubnetRouteTableAssociationSubnetPublicC:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPublicC
+      RouteTableId: !Ref RtbPublic
+  SubnetRouteTableAssociationSubnetPrivateA:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPrivateA
+      RouteTableId: !Ref RtbPrivate
+  SubnetRouteTableAssociationSubnetPrivateC:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPrivateC
+      RouteTableId: !Ref RtbPrivate
+  SubnetRouteTableAssociationSubnetTGWA:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetTGWA
+      RouteTableId: !Ref RtbTGW
+  SubnetRouteTableAssociationSubnetTGWC:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetTGWC
+      RouteTableId: !Ref RtbTGW
+
+Outputs:
+  NewVPC:
+    Value: !Ref NewVPC
+    Export: 
+      Name: WL1-VPCID-Export
+  SubnetPublicA:
+    Value: !Ref SubnetPublicA
+    Export: 
+      Name: WL1-PublicSubnet01AZa-SubnetID-Export
+  SubnetPublicC:
+    Value: !Ref SubnetPublicC
+    Export: 
+      Name: WL1-PublicSubnet02AZc-SubnetID-Export
+  SubnetPrivateA:
+    Value: !Ref SubnetPrivateA
+    Export: 
+      Name: WL1-PrivateSubnet01AZa-SubnetID-Export
+  SubnetPrivateC:
+    Value: !Ref SubnetPrivateC
+    Export: 
+      Name: WL1-PrivateSubnet02AZc-SubnetID-Export
+  SubnetTGWA:
+    Value: !Ref SubnetTGWA
+    Export: 
+      Name: WL1-TGWSubnet01AZa-SubnetID-Export
+  SubnetTGWC:
+    Value: !Ref SubnetTGWC
+    Export: 
+      Name: WL1-TGWSubnet02AZc-SubnetID-Export
+  RtbPrivate:
+    Value: !Ref RtbPrivate
+    Export: 
+      Name: WL1-PrivateSubnet-RouteTableID-Export

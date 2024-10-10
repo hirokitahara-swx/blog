@@ -1,0 +1,52 @@
+# Copyright (C) Serverworks Co.,Ltd. All rights reserved.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create SecurityGroups"
+
+
+Parameters:
+  CommonTagName:
+    Type: String
+    Default: Application
+  CommonTagValue:
+    Type: String
+    Default: Test-Resolver
+
+
+Resources:
+#SG ICMP
+  SGIcmp:
+    Type: "AWS::EC2::SecurityGroup"
+    DeletionPolicy: "Delete"
+    Properties:
+      GroupDescription: "icmp access from anywhere"
+      GroupName: "WL1-SG-icmp"
+      Tags:
+        - Key: "Name"
+          Value: "WL1-SG-icmp"
+        - Key: !Ref CommonTagName
+          Value: !Ref CommonTagValue  
+      VpcId: !ImportValue WL1-VPCID-Export
+  SGIcmpIngress0:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DeletionPolicy: "Delete"
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: "icmp access from anywhere"
+      FromPort: -1
+      GroupId: !Ref SGIcmp
+      IpProtocol: "icmp"
+      ToPort: -1
+  SGIcmpEgress0:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DeletionPolicy: "Delete"
+    Properties:
+      CidrIp: "0.0.0.0/0"
+      Description: "no limit access to anywhere"
+      GroupId: !Ref SGIcmp
+      IpProtocol: "-1"
+
+Outputs:
+  SGIcmp:
+    Value: !Ref SGIcmp
+    Export: 
+      Name: WL1-SGIcmp-SGID-Export
